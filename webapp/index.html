@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Финансы</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:var(--tg-theme-bg-color,#fff);--tx:var(--tg-theme-text-color,#111);--hint:var(--tg-theme-hint-color,#888);--card:var(--tg-theme-secondary-bg-color,#f2f2f7);--acc:var(--tg-theme-button-color,#2481cc)}
+*{box-sizing:border-box}body{margin:0;padding:12px;background:var(--bg);color:var(--tx);font:15px system-ui,sans-serif}
+.tabs{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto}
+.tabs button{border:0;border-radius:16px;padding:8px 14px;background:var(--card);color:var(--tx);white-space:nowrap}
+.tabs button.on{background:var(--acc);color:var(--tg-theme-button-text-color,#fff)}
+.total{background:var(--card);border-radius:14px;padding:16px;margin-bottom:12px}
+.total b{font-size:26px;display:block}
+.row{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--card)}
+.row small{color:var(--hint);display:block}.pos{color:#2e9e4f}.neg{color:#d9453d}
+.bar{height:6px;background:var(--card);border-radius:3px;margin-top:6px}.bar i{display:block;height:100%;background:var(--acc);border-radius:3px}
+</style></head><body>
+<div class="total"><small>Общий баланс</small><b id="sum">…</b></div>
+<div class="tabs" id="tabs"></div><div id="view"></div>
+<script>
+const tg=Telegram.WebApp;tg.ready();tg.expand();
+const f=n=>Number(n).toLocaleString('ru-RU',{maximumFractionDigits:2})+' ₽';
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let D,tab='Счета';
+const R=(a,b,c='')=>`<div class="row"><div>${a}</div><div class="${c}">${b}</div></div>`;
+const views={
+ 'Счета':d=>d.main.map(m=>R(esc(m.bank)+'<small>Основной счёт</small>',f(m.balance))).join('')+
+   d.accounts.map(a=>R(esc(a.bank_name)+`<small>${esc(a.account_type)}</small>`,f(a.balance))).join(''),
+ 'История':d=>d.transactions.map(t=>{const s=t.trans_type==='доход'?1:t.trans_type==='вычет'?-1:0;
+   return R(esc(t.category)+`<small>${esc(t.bank_name)} · ${esc(t.date)}</small>`,(s>0?'+':s<0?'−':'')+f(t.amount),s>0?'pos':s<0?'neg':'')}).join(''),
+ 'Кредиты':d=>d.credits.map(c=>R(esc(c.bank_name)+`<small>Платёж ${f(c.monthly_payment)} · ${c.payment_day??'—'} числа</small>
+   <div class="bar"><i style="width:${Math.max(0,100-100*c.remaining_amount/c.amount)}%"></i></div>`,f(c.remaining_amount))).join(''),
+ 'Бюджет':d=>d.budgets.map(b=>R(esc(b.category)+'<small>Остаток</small>',f(b.amount))).join('')
+};
+function render(){
+ document.getElementById('tabs').innerHTML=Object.keys(views).map(k=>`<button class="${k===tab?'on':''}" data-k="${k}">${k}</button>`).join('');
+ document.getElementById('view').innerHTML=views[tab](D)||'';
+ if(!document.getElementById('view').innerHTML)document.getElementById('view').innerHTML='<p style="color:var(--hint)">Нет данных</p>';
+}
+document.getElementById('tabs').onclick=e=>{if(e.target.dataset.k){tab=e.target.dataset.k;render()}};
+fetch('/api/summary',{headers:{'X-Init-Data':tg.initData}}).then(r=>{if(!r.ok)throw 0;return r.json()}).then(d=>{
+ D=d;document.getElementById('sum').textContent=f(d.main.reduce((s,m)=>s+m.balance,0)+d.accounts.reduce((s,a)=>s+a.balance,0));render();
+}).catch(()=>{document.getElementById('sum').textContent='Откройте приложение из Telegram'});
+</script></body></html>
